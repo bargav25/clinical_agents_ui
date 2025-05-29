@@ -31,7 +31,7 @@ class ChatMessage:
 
 class Config:
     API_URL = os.getenv("API_URL", "https://clinical-agents-333016757590.us-central1.run.app/api/v1")
-    PAGE_TITLE = "AI Triage System"
+    PAGE_TITLE = "Med-MACs"
     PAGE_ICON = "🏥"
     
     # UI Constants
@@ -173,9 +173,9 @@ class UIComponents:
         st.markdown("""
         <div style="text-align: center; padding: 1rem 0; background: linear-gradient(90deg, #1f77b4, #2ca02c); 
                     border-radius: 10px; margin-bottom: 2rem;">
-            <h1 style="color: white; margin: 0; font-size: 2.5rem;">🏥 AI Triage System</h1>
+            <h1 style="color: white; margin: 0; font-size: 2.5rem;">🏥 Med-MACs</h1>
             <p style="color: #f0f0f0; margin: 0.5rem 0 0 0; font-size: 1.1rem;">
-                Intelligent healthcare assessment at your fingertips
+                Smarter ER Triage. Faster Care.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -208,14 +208,23 @@ class UIComponents:
                         age = st.number_input("Age", min_value=1, max_value=120, value=25)
                     with col2:
                         gender = st.selectbox("Gender", ["male", "female", "other"])
+                    consent = st.checkbox(
+                        "I consent to share my information for clinical purposes.",
+                        value=False
+                    )
                 else:
                     age = 30  # Default for staff
                     gender = "not_specified"
-                
+                    consent = True  # Always True for staff, not used
+
                 submitted = st.form_submit_button("🔐 Sign In", use_container_width=True)
                 
                 if submitted:
-                    if name.strip() and email.strip():
+                    if not name.strip() or not email.strip():
+                        st.error("❌ Please enter both name and email")
+                    elif user_type == "patient" and not consent:
+                        st.error("❌ You must consent to share your information to proceed.")
+                    else:
                         with st.spinner("🔄 Signing in..."):
                             success, response = APIService.login_user(
                                 name.strip(), 
@@ -226,15 +235,20 @@ class UIComponents:
                             )
                             
                             if success:
-                                st.session_state.user_data = response
-                                st.session_state.user_id = response["id"]
-                                st.session_state.auth_done = True
-                                st.success("✅ Successfully signed in!")
-                                st.rerun()
+                                # Check if the returned user_type matches the selected one
+                                if response.get("user_type") != user_type:
+                                    st.error(
+                                        f"❌ This email is already registered as a '{response.get('user_type')}'. "
+                                        "Please log in with the correct role or use a different email."
+                                    )
+                                else:
+                                    st.session_state.user_data = response
+                                    st.session_state.user_id = response["id"]
+                                    st.session_state.auth_done = True
+                                    st.success("✅ Successfully signed in!")
+                                    st.rerun()
                             else:
                                 st.error(f"❌ Login failed: {response.get('error', 'Unknown error')}")
-                    else:
-                        st.error("❌ Please enter both name and email")
             
             # Show current user info
             if st.session_state.auth_done and st.session_state.user_data:
@@ -290,7 +304,7 @@ class UIComponents:
         if st.session_state.get("show_help", False):
             st.markdown("""
             ---
-            **ℹ️ How to use the AI Triage System:**
+            **ℹ️ How to use Med-MACs:**
             
             1. **Start Assessment**: Click 'Start New Assessment' to begin
             2. **Describe Symptoms**: Be detailed about your symptoms, when they started, and their severity
@@ -437,8 +451,8 @@ class StaffDashboard:
         fig = px.bar(
             x=esi_counts.index,
             y=esi_counts.values,
-            color=esi_counts.index,
-            color_continuous_scale='RdYlGn_r',
+            color=esi_counts.index.astype(str),
+            color_discrete_sequence=colors,
             title="Distribution by ESI Level"
         )
         
@@ -583,7 +597,7 @@ def main():
     if not UIComponents.render_sidebar_auth():
         st.markdown("""
         <div style="text-align: center; padding: 3rem; color: #666;">
-            <h3>👋 Welcome to AI Triage System</h3>
+            <h3>👋 Welcome!</h3>
             <p>Please sign in using the sidebar to get started with your health assessment.</p>
         </div>
         """, unsafe_allow_html=True)
